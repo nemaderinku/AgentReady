@@ -19,7 +19,6 @@ interface AuditEvent {
   status: "queued" | "running" | "pass" | "fail" | "error";
   message: string;
   subscore?: number;
-  streamingUrl?: string; // Live browser preview URL from TinyFish
   data?: {
     passed?: string[];
     failed?: string[];
@@ -44,7 +43,6 @@ interface TestState {
   status: "queued" | "running" | "pass" | "fail" | "error";
   message: string;
   subscore?: number;
-  streamingUrl?: string;
   startedAt?: number;
   passed: string[];
   failed: string[];
@@ -221,37 +219,45 @@ function TestCard({
 // LIVE BROWSER PREVIEW COMPONENT
 // =============================================================================
 
-function LivePreview({
-  streamingUrl,
-  activeTestName,
-}: {
-  streamingUrl: string;
-  activeTestName: string;
-}) {
+interface ActivityEntry {
+  testName: string;
+  message: string;
+  timestamp: number;
+}
+
+function LiveActivityFeed({ activities }: { activities: ActivityEntry[] }) {
+  const feedRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (feedRef.current) {
+      feedRef.current.scrollTop = feedRef.current.scrollHeight;
+    }
+  }, [activities]);
+
   return (
     <div className="border border-cyan-800/50 rounded-lg overflow-hidden bg-gray-900 animate-fade-in">
-      {/* Header bar */}
       <div className="px-4 py-2.5 bg-cyan-950/40 border-b border-cyan-800/30 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <div className="w-2 h-2 rounded-full bg-cyan-400 pulse-dot" />
           <span className="text-xs font-medium text-cyan-300">
-            Live Agent View
+            Live Agent Activity
           </span>
-          <span className="text-xs text-gray-500">—</span>
-          <span className="text-xs text-gray-400">{activeTestName}</span>
         </div>
         <span className="text-[10px] text-gray-600 font-mono">powered by TinyFish</span>
       </div>
 
-      {/* iframe container */}
-      <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
-        <iframe
-          src={streamingUrl}
-          className="absolute inset-0 w-full h-full"
-          style={{ border: "none" }}
-          allow="autoplay"
-          sandbox="allow-scripts allow-same-origin"
-        />
+      <div ref={feedRef} className="max-h-48 overflow-y-auto p-3 space-y-1.5 font-mono text-xs">
+        {activities.map((entry, i) => (
+          <div key={i} className="flex gap-2 animate-fade-in">
+            <span className="text-cyan-600 shrink-0">[{entry.testName}]</span>
+            <span className="text-gray-300">{entry.message}</span>
+          </div>
+        ))}
+        {activities.length > 0 && (
+          <div className="flex gap-2">
+            <span className="text-cyan-400 animate-pulse">_</span>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -271,8 +277,7 @@ export default function Home() {
   const [topFixes, setTopFixes] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [auditDomain, setAuditDomain] = useState<string>("");
-  const [activeStreamUrl, setActiveStreamUrl] = useState<string | null>(null);
-  const [activeStreamTest, setActiveStreamTest] = useState<string>("");
+  const [agentActivities, setAgentActivities] = useState<ActivityEntry[]>([]);
   const [justCompleted, setJustCompleted] = useState<Set<string>>(new Set());
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [previousScore, setPreviousScore] = useState<number | null>(null);
@@ -294,8 +299,7 @@ export default function Home() {
     setFinalScore(null);
     setTopFixes([]);
     setExpandedTests(new Set());
-    setActiveStreamUrl(null);
-    setActiveStreamTest("");
+    setAgentActivities([]);
     setPreviousScore(null);
     setApiError(false);
 
@@ -380,8 +384,6 @@ export default function Home() {
     if (event.testId === "complete") {
       // Audit is done!
       setIsAuditing(false);
-      setActiveStreamUrl(null);
-      setActiveStreamTest("");
       if (event.data) {
         setFinalScore({
           score: (event.data.score as number) || 0,
@@ -400,31 +402,16 @@ export default function Home() {
       if (event.status === "error") {
         setError(event.message);
         setIsAuditing(false);
-        setActiveStreamUrl(null);
       }
       return;
     }
 
-    // Capture streaming URL for live preview
-    if (event.streamingUrl) {
-      setActiveStreamUrl(event.streamingUrl);
-      // Find the test name
+    // Add running messages to the live activity feed
+    if (event.status === "running" && event.message) {
       setTests((prev) => {
         const test = prev.find((t) => t.id === event.testId);
-        if (test) setActiveStreamTest(test.name);
-        return prev;
-      });
-    }
-
-    // Clear streaming URL when a test completes
-    if (event.status === "pass" || event.status === "fail" || event.status === "error") {
-      // Check if there's still a running test (another agent might have a stream)
-      setTests((prev) => {
-        const stillRunning = prev.filter((t) => t.id !== event.testId && t.status === "running");
-        if (stillRunning.length === 0) {
-          setActiveStreamUrl(null);
-          setActiveStreamTest("");
-        }
+        const testName = test?.name || event.testId;
+        setAgentActivities((a) => [...a, { testName, message: event.message, timestamp: event.timestamp }]);
         return prev;
       });
     }
@@ -438,7 +425,6 @@ export default function Home() {
           status: event.status,
           message: event.message,
           subscore: event.subscore ?? t.subscore,
-          streamingUrl: event.streamingUrl || t.streamingUrl,
           startedAt: event.status === "running" && !t.startedAt ? Date.now() : t.startedAt,
           passed: (event.data?.passed as string[]) || t.passed,
           failed: (event.data?.failed as string[]) || t.failed,
@@ -623,10 +609,10 @@ export default function Home() {
           </div>
         )}
 
-        {/* Live Browser Preview */}
-        {activeStreamUrl && isAuditing && (
+        {/* Live Agent Activity Feed */}
+        {agentActivities.length > 0 && isAuditing && (
           <div className="max-w-2xl mx-auto mb-6">
-            <LivePreview streamingUrl={activeStreamUrl} activeTestName={activeStreamTest} />
+            <LiveActivityFeed activities={agentActivities} />
           </div>
         )}
 
@@ -802,8 +788,7 @@ export default function Home() {
                   setTopFixes([]);
                   setError(null);
                   setAuditId(null);
-                  setActiveStreamUrl(null);
-                  setActiveStreamTest("");
+                  setAgentActivities([]);
                   setPreviousScore(null);
                   setApiError(false);
                 }}

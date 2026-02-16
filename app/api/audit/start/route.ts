@@ -101,30 +101,22 @@ async function runAllTests(auditId: string, url: string, domain: string, previou
       const result = await runTinyFishAgentWithStream(
         { url, goal },
         (tfEvent) => {
-          // Forward live browser preview URL as soon as TinyFish sends it
-          const streamUrl =
-            tfEvent.streamingUrl ||
-            tfEvent.streaming_url ||
-            (tfEvent.type === "STREAMING_URL" || tfEvent.type === "streaming_url"
-              ? tfEvent.message
-              : null);
-
-          if (streamUrl) {
+          // Forward PROGRESS events to the live activity feed
+          if (tfEvent.type === "PROGRESS" && tfEvent.purpose) {
             pushAuditEvent(auditId, {
               testId: test.id,
               status: "running",
-              message: `Watching ${test.name} agent navigate...`,
-              streamingUrl: streamUrl,
+              message: tfEvent.purpose,
               timestamp: Date.now(),
             });
           }
 
-          // Forward step progress for richer status updates
-          if (tfEvent.message && tfEvent.type !== "COMPLETE" && tfEvent.type !== "ERROR") {
+          // Notify client as soon as TinyFish finishes (before local scoring)
+          if (tfEvent.type === "COMPLETE" && tfEvent.status === "COMPLETED") {
             pushAuditEvent(auditId, {
               testId: test.id,
               status: "running",
-              message: tfEvent.message,
+              message: `${test.name} agent done, scoring results...`,
               timestamp: Date.now(),
             });
           }

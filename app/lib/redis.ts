@@ -162,7 +162,6 @@ interface AuditEvent {
   message: string;
   subscore?: number;
   data?: Record<string, unknown>;
-  streamingUrl?: string; // Live browser preview URL from TinyFish
   timestamp: number;
 }
 

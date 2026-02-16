@@ -41,7 +41,6 @@ AI shopping agents from Amazon, ChatGPT, and Google are trying to buy from your 
 ## Features
 
 - **5-Agent Behavioral Audit** — Real AI web agents navigate your store, not static code analysis
-- **Live Agent Preview** — Watch agents browse your site in real time via TinyFish streaming
 - **Weighted Scoring** — 0-100 Agent Readiness Score with letter grade
 - **Shareable Report Pages** — Permanent `/report/{domain}` URLs with OG meta tags
 - **PDF & JSON Export** — Download audit results in multiple formats
@@ -105,7 +104,6 @@ Each test produces a 0-100 subscore. The weighted average is your **Agent Readin
 - **Form Interaction** — Variant selectors, add-to-cart buttons, checkout forms
 - **Dynamic Content** — Handles SPAs, lazy-loaded products, JavaScript-rendered pages
 - **Multi-step Flows** — Cart → checkout navigation across multiple page transitions
-- **SSE Streaming** — Live browser preview URLs streamed to the client in real time
 - **Structured Output** — JSON extraction from agent observations for automated scoring
 
 ### Redis Features Used
